@@ -1,0 +1,30 @@
+<package>
+  <name>nite_tracker_filter</name>
+  <version>1.0.0</version>
+  <description>nite_tracker_filter</description>
+  <maintainer email="ivan.vishniakou@smail.inf.h-brs.de">Ivan Vishniakou</maintainer>
+
+  <license>BSD</license>
+
+  <url type="website"></url>
+  <!-- <url type="bugtracker"></url> -->
+
+  <author>Ivan Vishniakou</author>
+
+  <!-- Dependencies which this package needs to build itself. -->
+  <buildtool_depend>catkin</buildtool_depend>
+
+  <!-- Dependencies needed to compile this package. -->
+  <build_depend>roscpp</build_depend>
+  <build_depend>rospy</build_depend>
+
+  <build_depend>tf</build_depend>
+  <build_depend>visualization_msgs</build_depend>
+
+  <!-- Dependencies needed after this package is compiled. -->
+  <run_depend>roscpp</run_depend>
+  <run_depend>rospy</run_depend>
+  <run_depend>tf</run_depend>
+  <run_depend>visualization_msgs</run_depend>
+
+</package>
