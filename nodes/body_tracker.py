@@ -31,6 +31,8 @@ class BodyTrackerNode:
         self._detected_people = []
         self._track_history = []
         self._max_hist_poses = 100
+        self._last_lost_track_time = None
+        self._last_goal_pub_time = rospy.Time.now()
         
         """
             Parameters
@@ -38,7 +40,8 @@ class BodyTrackerNode:
         rospy.loginfo('Reading params')
         self._follow_distance = rospy.get_param('follow_distance', 0.5)
         self._goal_frame_id = rospy.get_param('goal_frame_id', 'base_link')
-        self._goal_topic = rospy.get_param('nav_goal_topic', 'nav_goal')
+        self._goal_topic = rospy.get_param('nav_goal_topic', '/move_base_simple/goal')
+        self._goal_pub_rate = rospy.get_param('nav_goal_pub_rate', .2)
         self._base_frame_id = rospy.get_param('base_frame_id', 'base_link')
 
         rospy.logwarn('Goal frame is: ' +self._goal_frame_id)
@@ -117,7 +120,7 @@ class BodyTrackerNode:
                 Marker pos:
             '''
             marker = Marker()
-            marker.header.stamp = rospy.Time()
+            marker.header.stamp = rospy.Time.now()
             marker.ns = "nite_people"
             marker.type = Marker.TEXT_VIEW_FACING
             marker.action = Marker.ADD
@@ -212,6 +215,9 @@ class BodyTrackerNode:
                 '''
                     Get pose for target
                 '''
+                
+                                
+                
                 tmp_point = PointStamped()
                 tmp_point.point = Point(person.position.x, -person.position.y, person.position.z)
                 tmp_point.header.stamp = lct
@@ -240,8 +246,9 @@ class BodyTrackerNode:
                 target_pose.header = msg.header
                 target_pose.header.frame_id = self._goal_frame_id
                 
-                
-                self._nav_goal_publisher.publish(target_pose)
+                if (rospy.Time.now().to_sec() - self._last_goal_pub_time.to_sec()>1.0/self._goal_pub_rate):
+                    self._last_goal_pub_time = rospy.Time.now()
+                    self._nav_goal_publisher.publish(target_pose)
             pass
         self.visualize(source_frame)
     
@@ -250,6 +257,13 @@ class BodyTrackerNode:
         dist = skeleton.position.x**2+skeleton.position.y**2+skeleton.position.z**2
         dist = np.sqrt(dist)
         if dist<0.1:
+            if self._last_lost_track_time == None:
+                self._last_lost_track_time = rospy.Time().now()
+            lost_duration = rospy.Time.now().to_sec()-self._last_lost_track_time.to_sec()
+            if not lost_duration>7:
+                rospy.logwarn('LOST_TRACK {} seconds ago.'.format(lost_duration))
+                return
+            self._last_lost_track_time = rospy.Time()
             rospy.loginfo('LOST TRACK')
             last_position = self.low_pass(skeleton.position, append=False)
             closest_person = skeleton.user_id            

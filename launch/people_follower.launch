@@ -12,6 +12,8 @@
   goal_frame_id: map
   base_frame_id: base_link
   follow_distance: 0.5
+  nav_goal_topic: /move_base_simple/goal
+  nav_goal_pub_rate', .2
   </rosparam>
 
 </launch>
