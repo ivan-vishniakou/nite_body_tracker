@@ -36,7 +36,7 @@ class BodyTrackerNode:
             Parameters
         """
         rospy.loginfo('Reading params')
-        self._follow_distance = rospy.get_param('follow_distance', 1.0)
+        self._follow_distance = rospy.get_param('follow_distance', 0.5)
         self._goal_frame_id = rospy.get_param('goal_frame_id', 'base_link')
         self._goal_topic = rospy.get_param('nav_goal_topic', 'nav_goal')
         self._base_frame_id = rospy.get_param('base_frame_id', 'base_link')
@@ -74,6 +74,7 @@ class BodyTrackerNode:
                 self._following = False
             else:
                 self._following = True
+                #self._prev
                 rospy.logwarn('Following user {}.'.format(self._following_id))
             pass
         pass
@@ -93,7 +94,7 @@ class BodyTrackerNode:
         if len(self._detected_people)>0:
             for person in self._detected_people:
                 dist = person.position.x**2 + person.position.y**2 + person.position.z**2
-                print ['NONE','ERROR','CALIBRATIONG','TRACKED'][person.state]
+                print ['NONE','ERROR','CALIBRATING','TRACKED'][person.state]
                 print 'dist', dist
                 print person.position
                 if dist > 0.1 and (person.state == NiteSkeleton.SKELETON_TRACKED or NiteSkeleton.SKELETON_CALIBRATING):
@@ -105,30 +106,18 @@ class BodyTrackerNode:
         return closest_person        
     
     
-    def visualize(self, source_frame_id):
+    def visualize(self, source_frame):
         
-        
-        pass
-    
-    
-    def people_callback(self, msg):
-        self._detected_people = msg.skeletons
-        #print 'people_cb', msg.header, 'to' , self._goal_frame_id 
-        lct = self._tf.getLatestCommonTime(msg.header.frame_id, self._goal_frame_id)
-        if not self._tf.canTransform(self._goal_frame_id, msg.header.frame_id, lct):
-            rospy.logwarn('Unable to lookup transform from {} to {} \r\n Dropping message.'.format(msg.header.frame_id, self._goal_frame_id))
-            rospy.logwarn('msg: '+ str(msg.header.stamp))        
-            rospy.logwarn('lct: '+ str(lct))
-            rospy.logwarn('dif: '+str((msg.header.stamp.nsecs - lct.nsecs)/1000000) )
-            return
         marker_array = MarkerArray()
-        source_frame = msg.header.frame_id
-        for person in msg.skeletons:
+        lct = self._tf.getLatestCommonTime(self._goal_frame_id, source_frame)
+        for person in self._detected_people:
+            #print person.state
+            #print person.position
             '''
                 Marker pos:
             '''
             marker = Marker()
-            marker.header = msg.header
+            marker.header.stamp = rospy.Time()
             marker.ns = "nite_people"
             marker.type = Marker.TEXT_VIEW_FACING
             marker.action = Marker.ADD
@@ -136,7 +125,6 @@ class BodyTrackerNode:
             marker.id = len(marker_array.markers)
             marker.text = 'uid' + str(person.user_id) + \
                 (' TARGET' if self._following_id == person.user_id else '')
-            
             tmp_point = PointStamped()
             tmp_point.point = Point(person.position.x, -person.position.y, person.position.z)
             tmp_point.header.stamp = lct
@@ -145,16 +133,14 @@ class BodyTrackerNode:
             self._tf.waitForTransform(source_frame, self._goal_frame_id, lct, rospy.Duration(0.1))
             marker.pose.position = self._tf.transformPoint(self._goal_frame_id, tmp_point).point
             
-            '''
-                keep story of the track:
-            '''
-            
             color = ColorRGBA()
             color.a = 0.5
             if person.state == NiteSkeleton.SKELETON_NONE:
                 #rospy.loginfo('SKELETON NONE')
+                continue
                 color.r, color.g, color.b = 1, 1, 1
             elif person.state == NiteSkeleton.SKELETON_CALIBRATION_ERROR_NOT_IN_POSE:
+                continue
                 #rospy.loginfo('SKELETON_CALIBRATION_ERROR_NOT_IN_POSE')
                 color.r, color.g, color.b = 1, 0, 0
             elif person.state == NiteSkeleton.SKELETON_CALIBRATING:
@@ -165,10 +151,11 @@ class BodyTrackerNode:
                 color.r, color.g, color.b = 0, 1, 0
             if self._following_id == person.user_id:                    
                 color.a = 1.0
-                        
+                
             marker.color = color
             marker_array.markers.append(marker)
-
+            
+            '''     
             for joint in person.joints:
                 marker = Marker()
                 marker.header = msg.header
@@ -188,12 +175,53 @@ class BodyTrackerNode:
                 marker.id = len(marker_array.markers)
                 marker_array.markers.append(marker)
             pass
+            '''
+
+        for m in marker_array.markers:
+            m.lifetime = rospy.Duration(0.2)
+        self._marker_publisher.publish(marker_array)
+        pass
+    
+    
+    def people_callback(self, msg):
+        self._detected_people = msg.skeletons
+        if not (self._tf.frameExists(self._goal_frame_id) and 
+                self._tf.frameExists(msg.header.frame_id) and 
+                self._tf.frameExists(self._base_frame_id)):
+            rospy.logwarn('TF frames not ready, dropping msg')
+            return
+        lct = self._tf.getLatestCommonTime(msg.header.frame_id, self._goal_frame_id)
+        if not self._tf.canTransform(self._goal_frame_id, msg.header.frame_id, lct):
+            rospy.logwarn('Unable to lookup transform from {} to {} \r\n Dropping message.'.format(msg.header.frame_id, self._goal_frame_id))
+            rospy.logwarn('msg: '+ str(msg.header.stamp))        
+            rospy.logwarn('lct: '+ str(lct))
+            rospy.logwarn('dif: '+str((msg.header.stamp.nsecs - lct.nsecs)/1000000) )
+            return
+        
+        source_frame = msg.header.frame_id
+
+        for person in msg.skeletons:
+            if person.user_id == self._following_id:
+                self.check_tracking(person)
+
+        #print 'uids  :', [p.user_id for p in msg.skeletons]
+        #print 'states:', [p.state for p in msg.skeletons]
+        for person in msg.skeletons:
             
             if self._following_id == person.user_id:                    
                 '''
                     Get pose for target
                 '''
-                target_point = self.low_pass(marker.pose.position)
+                tmp_point = PointStamped()
+                tmp_point.point = Point(person.position.x, -person.position.y, person.position.z)
+                tmp_point.header.stamp = lct
+                tmp_point.header.frame_id = source_frame
+            
+                self._tf.waitForTransform(source_frame, self._goal_frame_id, lct, rospy.Duration(0.1))
+                tmp_point = self._tf.transformPoint(self._goal_frame_id, tmp_point)
+                #tmp_point.header.frame_id = self._goal_frame_id
+                
+                target_point = self.low_pass(tmp_point.point)
                 lct = self._tf.getLatestCommonTime(self._goal_frame_id, self._base_frame_id)
                 robot_point = PointStamped()
                 robot_point.point = Point(0,0,0)
@@ -215,15 +243,39 @@ class BodyTrackerNode:
                 
                 self._nav_goal_publisher.publish(target_pose)
             pass
+        self.visualize(source_frame)
+    
+    
+    def check_tracking(self, skeleton):
+        dist = skeleton.position.x**2+skeleton.position.y**2+skeleton.position.z**2
+        dist = np.sqrt(dist)
+        if dist<0.1:
+            rospy.loginfo('LOST TRACK')
+            last_position = self.low_pass(skeleton.position, append=False)
+            closest_person = skeleton.user_id            
+            closest_person_dist = 100000
+            for person in self._detected_people:
+                dist = (person.position.x-last_position.x)**2 + \
+                        (person.position.y-last_position.y)**2 + \
+                        (person.position.z-last_position.z)**2
+                print ['NONE','ERROR','CALIBRATING','TRACKED'][person.state]
+                print 'dist', dist
+                print person.position
+                if dist > 0.1 and (person.state == NiteSkeleton.SKELETON_TRACKED or NiteSkeleton.SKELETON_CALIBRATING):
+                    if dist < closest_person_dist:
+                        closest_person = person.user_id
+                        closest_person_dist = dist
+                    pass
+                pass
+            pass
+            self._following_id = closest_person
             
-        for m in marker_array.markers:
-            m.lifetime = rospy.Duration(0.2)
-        self._marker_publisher.publish(marker_array)
+        
     
-    
-    def low_pass(self, new_point):
-        last_points = 7
-        self._track_history.append(new_point)
+    def low_pass(self, new_point, append=True):
+        last_points = 5
+        if append:
+            self._track_history.append(new_point)
         if len(self._track_history)>self._max_hist_poses:
             self._track_history.pop(0)
         avg = Point()

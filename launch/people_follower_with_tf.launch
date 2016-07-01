@@ -1,0 +1,17 @@
+<?xml version="1.0"?>
+<launch>
+
+
+  <node pkg="tf" type="static_transform_publisher" name="base_link_to_cam" args="0.0 0.0 1.5 0.0 0.0 -1.57 /base_link /cam3d_link 100" />
+  <node pkg="tf" type="static_transform_publisher" name="map_to_base_link" args="-1.0 -1.0 0.0 0.0 0.0 0.0 /map /base_link 100" />
+
+
+  <!-- body filter node -->
+  <node pkg="nite_tracker_filter" type="body_tracker.py" name="body_tracker" required="true"/>
+  <rosparam>
+  goal_frame_id: map
+  base_frame_id: base_link
+  follow_distance: 0.5
+  </rosparam>
+
+</launch>
