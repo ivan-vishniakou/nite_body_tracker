@@ -38,6 +38,7 @@ class BodyTrackerNode:
             Parameters
         """
         rospy.loginfo('Reading params')
+        self._cam_frame_id = rospy.get_param('cam_frame_id', 'cam3d_frame')
         self._follow_distance = rospy.get_param('follow_distance', 0.5)
         self._goal_frame_id = rospy.get_param('goal_frame_id', 'base_link')
         self._goal_topic = rospy.get_param('nav_goal_topic', '/move_base_simple/goal')
@@ -187,6 +188,7 @@ class BodyTrackerNode:
     
     
     def people_callback(self, msg):
+        msg.header.frame_id = self._cam_frame_id
         self._detected_people = msg.skeletons
         if not (self._tf.frameExists(self._goal_frame_id) and 
                 self._tf.frameExists(msg.header.frame_id) and 
