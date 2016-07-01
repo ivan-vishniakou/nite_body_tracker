@@ -9,7 +9,7 @@
   <!-- body filter node -->
   <node pkg="nite_tracker_filter" type="body_tracker.py" name="body_tracker" required="true"/>
   <rosparam>
-  cam_frame_id: cam3d_frame
+  cam_frame_id: cam3d_link
   goal_frame_id: map
   base_frame_id: base_link
   follow_distance: 0.5

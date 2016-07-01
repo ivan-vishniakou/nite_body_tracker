@@ -11,7 +11,7 @@ import numpy as np
 
 from geometry_msgs.msg import PoseWithCovarianceStamped, PointStamped, \
                               PoseStamped, Point, Vector3, Quaternion
-from std_msgs.msg import Empty, ColorRGBA
+from std_msgs.msg import Empty, ColorRGBA, String
 from visualization_msgs.msg import Marker, MarkerArray
 from openni2_camera.msg import NiteJoint, NiteSkeleton, NitePeople
 
@@ -67,7 +67,22 @@ class BodyTrackerNode:
         self._marker_publisher = rospy.Publisher('/nite_people', MarkerArray, queue_size=10)
         self._nav_goal_publisher = rospy.Publisher(self._goal_topic, PoseStamped, queue_size=10)
         self._following_start_subscriber = rospy.Subscriber('/people_following/start', Empty, self.following_start_cb)
-        self._following_start_subscriber = rospy.Subscriber('/people_following/stop', Empty, self.following_stop_cb)        
+        self._following_start_subscriber = rospy.Subscriber('/people_following/stop', Empty, self.following_stop_cb)    
+        
+        self.main_cycle()
+        
+        
+    
+    def main_cycle(self):
+        rospy.logwarn('WAITING COMMAND')
+        rospy.wait_for_message('/body_tracker/event_in', String)
+        throwaway_pub = rospy.Publisher('/body_tracker/event_out', String, queue_size=10)
+        msg = String;
+        msg.data = 'e_started'
+        self.following_start_cb(None)
+        rospy.logwarn('GOT CMD')
+        
+        
         
         
     def following_start_cb(self, request):
@@ -130,7 +145,7 @@ class BodyTrackerNode:
             marker.text = 'uid' + str(person.user_id) + \
                 (' TARGET' if self._following_id == person.user_id else '')
             tmp_point = PointStamped()
-            tmp_point.point = Point(person.position.x, -person.position.y, person.position.z)
+            tmp_point.point = Point(person.position.x, person.position.y, person.position.z)
             tmp_point.header.stamp = lct
             tmp_point.header.frame_id = source_frame
             marker.header.frame_id = self._goal_frame_id
@@ -189,6 +204,11 @@ class BodyTrackerNode:
     
     def people_callback(self, msg):
         msg.header.frame_id = self._cam_frame_id
+        #fixing flip:
+        for person in msg.skeletons:
+            person.position.x *= -1
+            person.position.y *= -1
+        
         self._detected_people = msg.skeletons
         if not (self._tf.frameExists(self._goal_frame_id) and 
                 self._tf.frameExists(msg.header.frame_id) and 
@@ -221,7 +241,7 @@ class BodyTrackerNode:
                                 
                 
                 tmp_point = PointStamped()
-                tmp_point.point = Point(person.position.x, -person.position.y, person.position.z)
+                tmp_point.point = Point(person.position.x, person.position.y, person.position.z)
                 tmp_point.header.stamp = lct
                 tmp_point.header.frame_id = source_frame
             
